@@ -16,19 +16,23 @@
  *         -3 if the archive contains a header with an invalid checksum value
  */
 int check_archive(int tar_fd) {
-    char* buffer_magic = malloc(sizeof(char)*6);
+    char* buffer;
+    buffer = malloc(sizeof(char)*6);
     off_t magic_v = lseek(tar_fd,(off_t)257,SEEK_SET);
-    int m = snprintf(buffer_magic, sizeof(buffer_magic), "%lld", magic_v);
-    char valid_m[6] = "ustar";
-    int i=0;
-    while(i<6){
-        if(valid_m[i]!=buffer_magic[i]) return -1;
-        i++;
-    } 
+    int m = snprintf(buffer, sizeof(buffer), "%lld", magic_v);
+    if(strcmp(buffer,TMAGIC) != 0){
+        free(buffer);
+        return -1;
+    }
+    free(buffer);
+    buffer=malloc(sizeof(char)*2);
+    off_t version_v = lseek(tar_fd,(off_t)263,SEEK_SET);
+    int v = snprintf(buffer, sizeof(buffer), "%lld", version_v);
+    if (strcmp(version_v,TVERSION) != 0){
+        free(buffer);
+        return -2;
+    }
     
-    if(lseek(tar_fd,(off_t)257,SEEK_SET) == -1) return -1;
-    if(lseek(tar_fd,(off_t)263,SEEK_SET) == -1) return -2;
-    if(lseek(tar_fd,(off_t)148,SEEK_SET) == -1) return -3;
     return 0;
 }
 
@@ -53,7 +57,7 @@ int exists(int tar_fd, char *path) {
  *
  * @return zero if no entry at the given path exists in the archive or the entry is not a directory,
  *         any other value otherwise.
- */
+ *
 int is_dir(int tar_fd, char *path) {
     return 0;
 }
