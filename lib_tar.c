@@ -16,6 +16,19 @@
  *         -3 if the archive contains a header with an invalid checksum value
  */
 int check_archive(int tar_fd) {
+    char* buffer_magic = malloc(sizeof(char)*6);
+    off_t magic_v = lseek(tar_fd,(off_t)257,SEEK_SET);
+    int m = snprintf(buffer_magic, sizeof(buffer_magic), "%lld", magic_v);
+    char valid_m[6] = "ustar";
+    int i=0;
+    while(i<6){
+        if(valid_m[i]!=buffer_magic[i]) return -1;
+        i++;
+    } 
+    
+    if(lseek(tar_fd,(off_t)257,SEEK_SET) == -1) return -1;
+    if(lseek(tar_fd,(off_t)263,SEEK_SET) == -1) return -2;
+    if(lseek(tar_fd,(off_t)148,SEEK_SET) == -1) return -3;
     return 0;
 }
 
