@@ -1,4 +1,18 @@
 #include "lib_tar.h"
+#include <stdio.h>
+
+char* checksum(int size, int fd){
+    char* sm=malloc(sizeof(char)*8);
+    unsigned int sum = 0;
+    char buffer[size];
+    size_t f_read = read(fd,buffer,size);
+    if(f_read==-1) return -1;
+    for (int i = 0; i < sizeof(buffer); i++) {
+        sum += (unsigned char) buffer[i];
+    }
+    itoa(sum,sm,10);
+    return sm;
+}
 
 /**
  * Checks whether the archive is valid.
@@ -17,7 +31,9 @@
  */
 int check_archive(int tar_fd) {
     char* buffer;
-    buffer = malloc(sizeof(char)*6);
+
+
+    buffer = malloc(sizeof(char)*TMAGLEN);
     off_t magic_v = lseek(tar_fd,(off_t)257,SEEK_SET);
     int m = snprintf(buffer, sizeof(buffer), "%lld", magic_v);
     if(strcmp(buffer,TMAGIC) != 0){
@@ -25,14 +41,39 @@ int check_archive(int tar_fd) {
         return -1;
     }
     free(buffer);
-    buffer=malloc(sizeof(char)*2);
+
+    buffer=malloc(sizeof(char)*TVERSLEN);
     off_t version_v = lseek(tar_fd,(off_t)263,SEEK_SET);
     int v = snprintf(buffer, sizeof(buffer), "%lld", version_v);
     if (strcmp(version_v,TVERSION) != 0){
         free(buffer);
         return -2;
     }
-    
+    free(buffer);
+
+    // /The chksum field represents the simple sum of all bytes in the header block.
+    //  Each 8-bit byte in the header is added to an unsigned integer, initialized to zero, 
+    //  the precision of which shall be no less than seventeen bits. When calculating the checksum, 
+    //  the chksum field is treated as if it were all blanks. 
+    buffer=malloc(sizeof(char)*8);
+    off_t cheksum_v = lseek(tar_fd,(off_t)148,SEEK_SET);
+    int c = snprintf(buffer, sizeof(buffer), "%lld", cheksum_v);
+    char *size_buf = malloc(sizeof(char)*12);
+    off_t size_seek = lseek(tar_fd,(off_t)124,SEEK_SET);
+    int s = snprintf(size_buf, sizeof(size_buf), "%lld", size_seek);
+    int size = atoi(size_buf);
+    char* chsm = checksum(size,tar_fd);
+    if (strcmp(chsm,buffer) != 0){
+        free(chsm);
+        free(size_buf);
+        free(buffer);
+        return -3;
+    }
+    free(chsm);
+    free(size_buf);
+    free(buffer);
+
+
     return 0;
 }
 
