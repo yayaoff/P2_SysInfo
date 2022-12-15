@@ -144,6 +144,14 @@ int is_file(int tar_fd, char *path) {
  *         any other value otherwise.
  */
 int is_symlink(int tar_fd, char *path) {
+    if(exists(tar_fd,path)!=0){
+        struct stat s;
+        if(stat(path,&s)==-1){
+            return -1;
+        }
+        if (S_ISLNK(s.st_mode)) return 1;
+        return 0;
+    }
     return 0;
 }
 
