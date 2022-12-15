@@ -87,6 +87,7 @@ int check_archive(int tar_fd) {
  *         any other value otherwise.
  */
 int exists(int tar_fd, char *path) {
+    if (access(path, F_OK) == 0) return 1;
     return 0;
 }
 
