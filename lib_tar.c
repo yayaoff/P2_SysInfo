@@ -1,5 +1,6 @@
 #include "lib_tar.h"
 #include <stdio.h>
+#include <sys/stat.h> 
 
 char* checksum(int size, int fd){
     char* sm=malloc(sizeof(char)*8);
@@ -100,7 +101,16 @@ int exists(int tar_fd, char *path) {
  * @return zero if no entry at the given path exists in the archive or the entry is not a directory,
  *         any other value otherwise.
  *
+ **/
 int is_dir(int tar_fd, char *path) {
+    if(exists(tar_fd,path)!=0){
+        struct stat s;
+        if(stat(path,&s)==-1){
+            return -1;
+        }
+        if (S_ISDIR(s.st_mode)) return 1;
+        return 0;
+    }
     return 0;
 }
 
