@@ -64,7 +64,7 @@ int check_archive(int tar_fd) {
     //  the precision of which shall be no less than seventeen bits. When calculating the checksum, 
     //  the chksum field is treated as if it were all blanks. 
     char* size = buffer->size;
-    char* chsm = checksum(atoi(size),tar_fd);
+    char* chsm = checksum(buffer);
     char* cheksum_v = buffer->chksum;
     if (strcmp(chsm,cheksum_v) != 0){
         munmap(buffer, sb.st_size);
