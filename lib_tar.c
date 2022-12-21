@@ -49,13 +49,11 @@ int check_archive(int tar_fd) {
     struct stat sb;
     fstat(tar_fd, &sb);
     tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
-    char* magic_v = buffer->magic;
-    if(strcmp(magic_v,TMAGIC) != 0) {
+    if(strncmp(buffer->magic,TMAGIC, TMAGLEN) != 0) {
         munmap(buffer, sb.st_size);
         return -1;
     }
-    char* version_v = buffer->version;
-    if(strcmp(version_v,TVERSION) != 0){
+    if(strncmp(buffer->version,TVERSION, TVERSLEN) != 0){
         munmap(buffer, sb.st_size);
         return -2;
     } 
@@ -260,6 +258,15 @@ ssize_t read_file(int tar_fd, char *path, size_t offset, uint8_t *dest, size_t *
     return -1;
 }
 
-int main(){
-    return 1;
+int main(int argc, char *argv[]) {
+    int fd = open(argv[1] , O_RDONLY);
+    if (fd == -1) {
+        perror("open(tar_file)");
+        return -1;
+    }
+
+    int ret = check_archive(fd);
+    printf("%d\n", ret);
+
+    return 0;
 }
