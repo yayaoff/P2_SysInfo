@@ -17,7 +17,7 @@ typedef struct posix_header
     char chksum[8];               /* 148 */
     char typeflag;                /* 156 */
     char linkname[100];           /* 157 */
-    char mag156ic[6];             /* 257 */
+    char magic[6];             /* 257 */
     char version[2];              /* 263 */
     char uname[32];               /* 265 */
     char gname[32];               /* 297 */

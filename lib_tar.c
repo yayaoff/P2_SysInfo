@@ -4,15 +4,27 @@
 #include <string.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <sys/mman.h>
 
-char* checksum(int size, int fd){
+int is_end(tar_header_t* buffer){
+    if (buffer == MAP_FAILED) {
+        perror("mmap");
+        return 0;
+    }
+    char* buf = (char*)buffer;
+    for (int i = 0; i < 1024; i++)
+    {
+        if(buf[i] != '\0') return 0;
+    }
+    return 1; //End
+}
+
+char* checksum(tar_header_t* buffer){
     char* sm=malloc(sizeof(char)*8);
     unsigned int sum = 0;
-    char buffer[size];
-    size_t f_read = read(fd,buffer,size);
-    if(f_read==-1) return NULL;
-    for (int i = 0; i < sizeof(buffer); i++) {
-        sum += (unsigned char) buffer[i];
+    char* buf = (char*) buffer;
+    for (int i = 0; i < sizeof(buf); i++) {
+        sum += buf[i];
     }
     sprintf(sm, "%d", sum);
     return sm;
@@ -34,49 +46,33 @@ char* checksum(int size, int fd){
  *         -3 if the archive contains a header with an invalid checksum value
  */
 int check_archive(int tar_fd) {
-    char* buffer;
-
-
-    buffer = malloc(sizeof(char)*TMAGLEN);
-    off_t magic_v = lseek(tar_fd,(off_t)257,SEEK_SET);
-    int m = snprintf(buffer, sizeof(buffer), "%ld", magic_v);
-    if(strcmp(buffer,TMAGIC) != 0){
-        free(buffer);
+    struct stat sb;
+    fstat(tar_fd, &sb);
+    tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
+    char* magic_v = buffer->magic;
+    if(strcmp(magic_v,TMAGIC) != 0) {
+        munmap(buffer, sb.st_size);
         return -1;
     }
-    free(buffer);
-
-    buffer=malloc(sizeof(char)*TVERSLEN);
-    off_t version_v = lseek(tar_fd,(off_t)263,SEEK_SET);
-    int v = snprintf(buffer, sizeof(buffer), "%ld", version_v);
-    if (strcmp(buffer,TVERSION) != 0){
-        free(buffer);
+    char* version_v = buffer->version;
+    if(strcmp(version_v,TVERSION) != 0){
+        munmap(buffer, sb.st_size);
         return -2;
-    }
-    free(buffer);
-
+    } 
     // /The chksum field represents the simple sum of all bytes in the header block.
     //  Each 8-bit byte in the header is added to an unsigned integer, initialized to zero, 
     //  the precision of which shall be no less than seventeen bits. When calculating the checksum, 
     //  the chksum field is treated as if it were all blanks. 
-    buffer=malloc(sizeof(char)*8);
-    off_t cheksum_v = lseek(tar_fd,(off_t)148,SEEK_SET);
-    int c = snprintf(buffer, sizeof(buffer), "%ld", cheksum_v);
-    char *size_buf = malloc(sizeof(char)*12);
-    off_t size_seek = lseek(tar_fd,(off_t)124,SEEK_SET);
-    int s = snprintf(size_buf, sizeof(size_buf), "%ld", size_seek);
-    int size = atoi(size_buf);
-    char* chsm = checksum(size,tar_fd);
-    if (strcmp(chsm,buffer) != 0){
+    char* size = buffer->size;
+    char* chsm = checksum(atoi(size),tar_fd);
+    char* cheksum_v = buffer->chksum;
+    if (strcmp(chsm,cheksum_v) != 0){
+        munmap(buffer, sb.st_size);
         free(chsm);
-        free(size_buf);
-        free(buffer);
         return -3;
     }
     free(chsm);
-    free(size_buf);
-    free(buffer);
-
+    munmap(buffer, sb.st_size);
 
     return 0;
 }
@@ -131,6 +127,7 @@ int exists(int tar_fd, char *path) {
  *
  **/
 int is_dir(int tar_fd, char *path) {
+
     if(exists(tar_fd,path)!=0){
         char* buffer=malloc(sizeof(char));
         off_t typeflag_seek = lseek(tar_fd,(off_t)156,SEEK_SET);

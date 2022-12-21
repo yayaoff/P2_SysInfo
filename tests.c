@@ -2,12 +2,11 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-
 #include "lib_tar.h"
 
 /**
  * You are free to use this file to write tests for your implementation
- */
+*/
 
 void debug_dump(const uint8_t *bytes, size_t len) {
     for (int i = 0; i < len;) {
