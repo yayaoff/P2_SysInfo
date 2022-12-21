@@ -264,5 +264,5 @@ ssize_t read_file(int tar_fd, char *path, size_t offset, uint8_t *dest, size_t *
 }
 
 int main(){
-    return 3;
+    return 4;
 }
