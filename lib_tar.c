@@ -4,6 +4,27 @@
 #include <string.h>
 #include <stdlib.h>
 #include <fcntl.h>
+ #include <sys/mman.h>
+
+int is_end(int fd){
+    struct stat sb;
+    fstat(fd, &sb);
+    tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);;
+    if (buffer == MAP_FAILED) {
+        perror("mmap");
+        return 0;
+    }
+    char* buf = (char*)buffer;
+    for (int i = 0; i < 1024; i++)
+    {
+        if(buf[i] != '\0'){
+            munmap(buffer, sb.st_size);
+            return 0;
+        }
+    }
+    munmap(buffer, sb.st_size);
+    return 1; //End
+}
 
 char* checksum(int size, int fd){
     char* sm=malloc(sizeof(char)*8);
@@ -263,6 +284,15 @@ ssize_t read_file(int tar_fd, char *path, size_t offset, uint8_t *dest, size_t *
     return -1;
 }
 
-int main(){
-    return 4;
+int main(int argc, char **argv){
+    int fd = open(argv[1] , O_RDONLY);
+    if (fd == -1) {
+        perror("open(tar_file)");
+        return -1;
+    }
+
+    int ret = is_end(fd);
+    printf("%d\n", ret);
+
+    return 0;
 }
