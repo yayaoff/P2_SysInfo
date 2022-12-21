@@ -1,6 +1,7 @@
 #include "lib_tar.h"
 #include <stdio.h>
 #include <sys/stat.h> 
+#include <string.h>
 
 char* checksum(int size, int fd){
     char* sm=malloc(sizeof(char)*8);
@@ -36,7 +37,7 @@ int check_archive(int tar_fd) {
 
     buffer = malloc(sizeof(char)*TMAGLEN);
     off_t magic_v = lseek(tar_fd,(off_t)257,SEEK_SET);
-    int m = snprintf(buffer, sizeof(buffer), "%lld", magic_v);
+    int m = snprintf(buffer, sizeof(buffer), "%ld", magic_v);
     if(strcmp(buffer,TMAGIC) != 0){
         free(buffer);
         return -1;
@@ -45,7 +46,7 @@ int check_archive(int tar_fd) {
 
     buffer=malloc(sizeof(char)*TVERSLEN);
     off_t version_v = lseek(tar_fd,(off_t)263,SEEK_SET);
-    int v = snprintf(buffer, sizeof(buffer), "%lld", version_v);
+    int v = snprintf(buffer, sizeof(buffer), "%ld", version_v);
     if (strcmp(version_v,TVERSION) != 0){
         free(buffer);
         return -2;
@@ -58,10 +59,10 @@ int check_archive(int tar_fd) {
     //  the chksum field is treated as if it were all blanks. 
     buffer=malloc(sizeof(char)*8);
     off_t cheksum_v = lseek(tar_fd,(off_t)148,SEEK_SET);
-    int c = snprintf(buffer, sizeof(buffer), "%lld", cheksum_v);
+    int c = snprintf(buffer, sizeof(buffer), "%ld", cheksum_v);
     char *size_buf = malloc(sizeof(char)*12);
     off_t size_seek = lseek(tar_fd,(off_t)124,SEEK_SET);
-    int s = snprintf(size_buf, sizeof(size_buf), "%lld", size_seek);
+    int s = snprintf(size_buf, sizeof(size_buf), "%ld", size_seek);
     int size = atoi(size_buf);
     char* chsm = checksum(size,tar_fd);
     if (strcmp(chsm,buffer) != 0){
@@ -88,9 +89,48 @@ int check_archive(int tar_fd) {
  *         any other value otherwise.
  */
 int exists(int tar_fd, char *path) {
-    if (access(path, F_OK) == 0) return 1;
+    if(check_archive(tar_fd)==0){
+        if (access(path, F_OK) == 0) return 1;
+    }
     return 0;
 }
+
+/**
+ * Checks whether an entry exists in the archive.
+ *
+ * @param tar_fd A file descriptor pointing to the start of a valid tar archive file.
+ * @param path A path to an entry in the archive.
+ *
+ * @return zero if no entry at the given path exists in the archive,
+ *         any other value otherwise.
+ */
+int exists(int tar_fd, char *path) {
+
+    return 0;
+}
+
+
+// /**
+//  * Checks whether an entry exists in the archive and is a directory.
+//  *
+//  * @param tar_fd A file descriptor pointing to the start of a valid tar archive file.
+//  * @param path A path to an entry in the archive.
+//  *
+//  * @return zero if no entry at the given path exists in the archive or the entry is not a directory,
+//  *         any other value otherwise.
+//  *
+//  **/
+// int is_dir(int tar_fd, char *path) {
+//     if(exists(tar_fd,path)!=0){
+//         struct stat s;
+//         if(stat(path,&s)==-1){
+//             return -1;
+//         }
+//         if (S_ISDIR(s.st_mode)) return 1;
+//         return 0;
+//     }
+//     return 0;
+// }
 
 /**
  * Checks whether an entry exists in the archive and is a directory.
@@ -104,15 +144,19 @@ int exists(int tar_fd, char *path) {
  **/
 int is_dir(int tar_fd, char *path) {
     if(exists(tar_fd,path)!=0){
-        struct stat s;
-        if(stat(path,&s)==-1){
-            return -1;
+        char* buffer=malloc(sizeof(char));
+        off_t typeflag_seek = lseek(tar_fd,(off_t)156,SEEK_SET);
+        int tf = snprintf(buffer, sizeof(buffer), "%ld", typeflag_seek);
+        if(strcmp(buffer,DIRTYPE)!=0){
+            free(buffer);
+            return 0;
         }
-        if (S_ISDIR(s.st_mode)) return 1;
-        return 0;
+        free(buffer);
+        return 1;
     }
     return 0;
 }
+
 
 /**
  * Checks whether an entry exists in the archive and is a file.
@@ -125,12 +169,15 @@ int is_dir(int tar_fd, char *path) {
  */
 int is_file(int tar_fd, char *path) {
     if(exists(tar_fd,path)!=0){
-        struct stat s;
-        if(stat(path,&s)==-1){
-            return -1;
+        char* buffer=malloc(sizeof(char));
+        off_t typeflag_seek = lseek(tar_fd,(off_t)156,SEEK_SET);
+        int tf = snprintf(buffer, sizeof(buffer), "%ld", typeflag_seek);
+        if(strcmp(buffer,REGTYPE)!=0 && strcmp(buffer,AREGTYPE)!=0 ){
+            free(buffer);
+            return 0;
         }
-        if (S_ISREG(s.st_mode)) return 1;
-        return 0;
+        free(buffer);
+        return 1;
     }
     return 0;
 }
@@ -154,7 +201,6 @@ int is_symlink(int tar_fd, char *path) {
     }
     return 0;
 }
-
 
 /**
  * Lists the entries at a given path in the archive.
