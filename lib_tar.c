@@ -55,12 +55,15 @@ char* checksum(int size, int fd){
  *         -3 if the archive contains a header with an invalid checksum value
  */
 int check_archive(int tar_fd) {
-    char* buffer;
+    struct stat sb;
+    fstat(tar_fd, &sb);
+    tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);;
+    if (buffer == MAP_FAILED) {
+        perror("mmap");
+        return 0;
+    }
+    char* buf = (char*)buffer;
 
-
-    buffer = malloc(sizeof(char)*TMAGLEN);
-    off_t magic_v = lseek(tar_fd,(off_t)257,SEEK_SET);
-    int m = snprintf(buffer, sizeof(buffer), "%ld", magic_v);
     if(strcmp(buffer,TMAGIC) != 0){
         free(buffer);
         return -1;
@@ -153,6 +156,8 @@ int exists(int tar_fd, char *path) {
  **/
 int is_dir(int tar_fd, char *path) {
     if(exists(tar_fd,path)!=0){
+    while (is_end(tar_fd) == 0)
+    {
         char* buffer=malloc(sizeof(char));
         off_t typeflag_seek = lseek(tar_fd,(off_t)156,SEEK_SET);
         int tf = snprintf(buffer, sizeof(buffer), "%ld", typeflag_seek);
@@ -163,7 +168,8 @@ int is_dir(int tar_fd, char *path) {
             return 0;
         }
         free(buffer);
-        return 1;
+        return 1;    
+        }
     }
     return 0;
 }
@@ -180,19 +186,21 @@ int is_dir(int tar_fd, char *path) {
  */
 int is_file(int tar_fd, char *path) {
     if(exists(tar_fd,path)!=0){
-        char* buffer=malloc(sizeof(char));
-        off_t typeflag_seek = lseek(tar_fd,(off_t)156,SEEK_SET);
-        int tf = snprintf(buffer, sizeof(buffer), "%ld", typeflag_seek);
-        char* buf_filetype=malloc(sizeof(char));
-        char* buf_afiletype=malloc(sizeof(char));
-        sprintf(buf_filetype, "%c", REGTYPE);
-        sprintf(buf_afiletype, "%c", AREGTYPE);
-        if(strcmp(buffer,buf_filetype)!=0 && strcmp(buffer,buf_afiletype)!=0 ){
+        while(is_end(tar_fd)==0){
+            char* buffer=malloc(sizeof(char));
+            off_t typeflag_seek = lseek(tar_fd,(off_t)156,SEEK_SET);
+            int tf = snprintf(buffer, sizeof(buffer), "%ld", typeflag_seek);
+            char* buf_filetype=malloc(sizeof(char));
+            char* buf_afiletype=malloc(sizeof(char));
+            sprintf(buf_filetype, "%c", REGTYPE);
+            sprintf(buf_afiletype, "%c", AREGTYPE);
+            if(strcmp(buffer,buf_filetype)!=0 && strcmp(buffer,buf_afiletype)!=0 ){
+                free(buffer);
+                return 0;
+            }
             free(buffer);
-            return 0;
+            return 1;
         }
-        free(buffer);
-        return 1;
     }
     return 0;
 }
@@ -207,12 +215,15 @@ int is_file(int tar_fd, char *path) {
  */
 int is_symlink(int tar_fd, char *path) {
     if(exists(tar_fd,path)!=0){
-        struct stat s;
-        if(stat(path,&s)==-1){
-            return -1;
+        while (is_end(tar_fd) == 0)
+        {
+            struct stat s;
+            if(stat(path,&s)==-1){
+                return -1;
+            }
+            if (S_ISLNK(s.st_mode)) return 1;
+            return 0;
         }
-        if (S_ISLNK(s.st_mode)) return 1;
-        return 0;
     }
     return 0;
 }
@@ -240,7 +251,11 @@ int is_symlink(int tar_fd, char *path) {
  *         any other value otherwise.
  */
 int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
-    return 0;
+    if(is_dir(tar_fd,path) != 0){
+        while (is_end(tar_fd) == 0){
+            
+        }
+    }
 }
 
 /**
@@ -263,23 +278,25 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
  */
 ssize_t read_file(int tar_fd, char *path, size_t offset, uint8_t *dest, size_t *len) {
     if(is_file(tar_fd,path)!=0){
-        struct stat s;
-        if(stat(path,&s)==-1){
-            return -1;
+        while(is_end(tar_fd)==0){
+            struct stat s;
+            if(stat(path,&s)==-1){
+                return -1;
+            }
+            if(offset>s.st_size){
+                return -2;
+            }
+            int fd = open(path,S_IRUSR);
+            if(fd==-1){
+                return -1;
+            }
+            ssize_t read_bytes = pread(fd,dest,*len,offset);
+            if(read_bytes==-1){
+                return -1;
+            }
+            *len = read_bytes;
+            return s.st_size-read_bytes;
         }
-        if(offset>s.st_size){
-            return -2;
-        }
-        int fd = open(path,S_IRUSR);
-        if(fd==-1){
-            return -1;
-        }
-        ssize_t read_bytes = pread(fd,dest,*len,offset);
-        if(read_bytes==-1){
-            return -1;
-        }
-        *len = read_bytes;
-        return s.st_size-read_bytes;
     }
     return -1;
 }
@@ -291,7 +308,7 @@ int main(int argc, char **argv){
         return -1;
     }
 
-    int ret = is_end(fd);
+    int ret = read_file(fd, argv[2], 0, NULL, NULL);
     printf("%d\n", ret);
 
     return 0;
