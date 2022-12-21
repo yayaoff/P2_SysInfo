@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <sys/stat.h> 
 #include <string.h>
+#include <stdlib.h>
+#include <fcntl.h>
 
 char* checksum(int size, int fd){
     char* sm=malloc(sizeof(char)*8);
@@ -12,7 +14,7 @@ char* checksum(int size, int fd){
     for (int i = 0; i < sizeof(buffer); i++) {
         sum += (unsigned char) buffer[i];
     }
-    itoa(sum,sm,10); 
+    sprintf(sm, "%d", sum);
     return sm;
 }
 
@@ -47,7 +49,7 @@ int check_archive(int tar_fd) {
     buffer=malloc(sizeof(char)*TVERSLEN);
     off_t version_v = lseek(tar_fd,(off_t)263,SEEK_SET);
     int v = snprintf(buffer, sizeof(buffer), "%ld", version_v);
-    if (strcmp(version_v,TVERSION) != 0){
+    if (strcmp(buffer,TVERSION) != 0){
         free(buffer);
         return -2;
     }
@@ -95,20 +97,6 @@ int exists(int tar_fd, char *path) {
     return 0;
 }
 
-// /**
-//  * Checks whether an entry exists in the archive.
-//  *
-//  * @param tar_fd A file descriptor pointing to the start of a valid tar archive file.
-//  * @param path A path to an entry in the archive.
-//  *
-//  * @return zero if no entry at the given path exists in the archive,
-//  *         any other value otherwise.
-//  */
-// int exists(int tar_fd, char *path) {
-
-//     return 0;
-// }
-
 
 // /**
 //  * Checks whether an entry exists in the archive and is a directory.
@@ -147,7 +135,9 @@ int is_dir(int tar_fd, char *path) {
         char* buffer=malloc(sizeof(char));
         off_t typeflag_seek = lseek(tar_fd,(off_t)156,SEEK_SET);
         int tf = snprintf(buffer, sizeof(buffer), "%ld", typeflag_seek);
-        if(strcmp(buffer,DIRTYPE)!=0){
+        char* buf_dirtype=malloc(sizeof(char));
+        sprintf(buf_dirtype, "%c", DIRTYPE);
+        if(strcmp(buffer,buf_dirtype)!=0){
             free(buffer);
             return 0;
         }
@@ -172,7 +162,11 @@ int is_file(int tar_fd, char *path) {
         char* buffer=malloc(sizeof(char));
         off_t typeflag_seek = lseek(tar_fd,(off_t)156,SEEK_SET);
         int tf = snprintf(buffer, sizeof(buffer), "%ld", typeflag_seek);
-        if(strcmp(buffer,REGTYPE)!=0 && strcmp(buffer,AREGTYPE)!=0 ){
+        char* buf_filetype=malloc(sizeof(char));
+        char* buf_afiletype=malloc(sizeof(char));
+        sprintf(buf_filetype, "%c", REGTYPE);
+        sprintf(buf_afiletype, "%c", AREGTYPE);
+        if(strcmp(buffer,buf_filetype)!=0 && strcmp(buffer,buf_afiletype)!=0 ){
             free(buffer);
             return 0;
         }
@@ -267,4 +261,8 @@ ssize_t read_file(int tar_fd, char *path, size_t offset, uint8_t *dest, size_t *
         return s.st_size-read_bytes;
     }
     return -1;
+}
+
+int main(){
+    return 0;
 }
