@@ -8,11 +8,11 @@ char* checksum(int size, int fd){
     unsigned int sum = 0;
     char buffer[size];
     size_t f_read = read(fd,buffer,size);
-    if(f_read==-1) return -1;
+    if(f_read==-1) return NULL;
     for (int i = 0; i < sizeof(buffer); i++) {
         sum += (unsigned char) buffer[i];
     }
-    itoa(sum,sm,10);
+    itoa(sum,sm,10); 
     return sm;
 }
 
@@ -95,19 +95,19 @@ int exists(int tar_fd, char *path) {
     return 0;
 }
 
-/**
- * Checks whether an entry exists in the archive.
- *
- * @param tar_fd A file descriptor pointing to the start of a valid tar archive file.
- * @param path A path to an entry in the archive.
- *
- * @return zero if no entry at the given path exists in the archive,
- *         any other value otherwise.
- */
-int exists(int tar_fd, char *path) {
+// /**
+//  * Checks whether an entry exists in the archive.
+//  *
+//  * @param tar_fd A file descriptor pointing to the start of a valid tar archive file.
+//  * @param path A path to an entry in the archive.
+//  *
+//  * @return zero if no entry at the given path exists in the archive,
+//  *         any other value otherwise.
+//  */
+// int exists(int tar_fd, char *path) {
 
-    return 0;
-}
+//     return 0;
+// }
 
 
 // /**
@@ -247,5 +247,24 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
  *
  */
 ssize_t read_file(int tar_fd, char *path, size_t offset, uint8_t *dest, size_t *len) {
-    return 0;
+    if(is_file(tar_fd,path)!=0){
+        struct stat s;
+        if(stat(path,&s)==-1){
+            return -1;
+        }
+        if(offset>s.st_size){
+            return -2;
+        }
+        int fd = open(path,S_IRUSR);
+        if(fd==-1){
+            return -1;
+        }
+        ssize_t read_bytes = pread(fd,dest,*len,offset);
+        if(read_bytes==-1){
+            return -1;
+        }
+        *len = read_bytes;
+        return s.st_size-read_bytes;
+    }
+    return -1;
 }
