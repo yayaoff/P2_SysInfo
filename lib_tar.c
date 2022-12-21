@@ -116,7 +116,7 @@ int exists(int tar_fd, char *path) {
             munmap(buffer, sb -> st_size);
             return 1;
         }
-        buffer = (tar_header_t*) (buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
+        *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
     }
 }
 
@@ -153,7 +153,7 @@ int exists(int tar_fd, char *path) {
  *         any other value otherwise.
  *
  **/
-int is_dir(int tar_fd, char *path) {
+int is_dir(int tar_fd, char *path) { //casser
     if(exists(tar_fd,path)!=0){
         struct stat sb;
         fstat(tar_fd, &sb);
@@ -206,7 +206,7 @@ int is_file(int tar_fd, char *path) {
             free(buffer);
             return 1;
         }
-        buffer = (tar_header_t*)(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
+        *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
     }
     return 0;
 }
@@ -233,7 +233,7 @@ int is_symlink(int tar_fd, char *path) {
             if (S_ISLNK(s.st_mode)) return 1;
             return 0;
         }
-        buffer = (tar_header_t*)(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
+        *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
     }
     return 0;
 }
@@ -266,7 +266,7 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
         fstat(tar_fd, &sb);
         tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
         while (is_end(buffer) == 0){
-            buffer = (tar_header_t*)(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
+            *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
         }
     }
 }
@@ -313,7 +313,7 @@ ssize_t read_file(int tar_fd, char *path, size_t offset, uint8_t *dest, size_t *
             *len = read_bytes;
             return s -> st_size-read_bytes;
         }
-        buffer = (tar_header_t*)(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
+        *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
     }
     return -5;
 }
@@ -325,7 +325,7 @@ int main(int argc, char **argv){
         return -1;
     }
 
-    int ret = is_dir(fd , argv[2]);
+    int ret = exists(fd , argv[2]);
     printf("%d\n", ret);
 
     return 0;
