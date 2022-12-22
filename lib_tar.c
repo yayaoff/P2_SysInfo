@@ -79,8 +79,7 @@ int check_archive(int tar_fd) {
         return -2;
     } 
     char* chsm = checksum(buffer);
-    char* cheksum_v = buffer->chksum;
-    if (strcmp(chsm,cheksum_v) != 0){
+    if (strncmp(chsm,buffer->chksum,) != 0){
         munmap(buffer, sb.st_size);
         free(chsm);
         return -3;
@@ -318,18 +317,19 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
  *
  */
 ssize_t read_file(int tar_fd, char *path, size_t offset, uint8_t *dest, size_t *len) {
+    struct stat sb;
+    fstat(tar_fd, &sb);
+    tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
+    if(offset > *len) return -2;
     if(is_file(tar_fd,path)!=0){
-        struct stat sb;
-        fstat(tar_fd, &sb);
-        tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
         while(is_end(buffer)==0){
-            if(offset > *len){
-                return -2;
-            }
             memcpy(dest, buffer + 512 + offset, *len);
             buffer = (tar_header_t*)((uint8_t*)buffer + 512 + find_block(TAR_INT(buffer->size))*512);  
         }
         return 0;
+    }
+    if(is_symlink(tar_fd,path)!=0){
+        return read_file(tar_fd, buffer -> linkname, offset, dest,len);
     }
     return -1;
 }
