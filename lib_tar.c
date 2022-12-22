@@ -111,11 +111,13 @@ int exists(int tar_fd, char *path) {
     fstat(tar_fd, &sb);
     tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
     while(is_end(buffer) == 0){
+        //printf("%s\n",buffer->name);
         if(strcmp(buffer->name,path) == 0){
             munmap(buffer, sb.st_size);
             return 1;
         }
-        buffer = (tar_header_t*) ((uint8_t*)buffer + 512 + TAR_INT(buffer->size));
+        printf("%ld", TAR_INT(buffer->size));
+        buffer = (tar_header_t*) ((int*)buffer + 512 + find_block(TAR_INT(buffer->size))*512);
     }
     munmap(buffer, sb.st_size);
     return 0;
@@ -171,7 +173,7 @@ int is_dir(int tar_fd, char *path) {
             free(buffer);
             return 1;    
             }
-        buffer = (tar_header_t*) ((uint8_t*)buffer + 512 + TAR_INT(buffer->size));
+            buffer = (tar_header_t*)(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
         }
     return 0;
 }
@@ -200,14 +202,13 @@ int is_file(int tar_fd, char *path) {
             sprintf(buf_filetype, "%c", REGTYPE);
             sprintf(buf_afiletype, "%c", AREGTYPE);
             if(strcmp(buffer,buf_filetype)!=0 && strcmp(buffer,buf_afiletype)!=0 ){
-                printf("%d", strcmp(buffer,buf_filetype));
                 free(buffer);
                 return 0;
             }
             free(buffer);
             return 1;
         }
-        buffer = (tar_header_t*) ((uint8_t*)buffer + 512 + TAR_INT(buffer->size));
+        *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
     }
     return 0;
 }
@@ -234,7 +235,7 @@ int is_symlink(int tar_fd, char *path) {
             if (S_ISLNK(s.st_mode)) return 1;
             return 0;
         }
-        buffer = (tar_header_t*) ((uint8_t*)buffer + 512 + TAR_INT(buffer->size));
+        *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
     }
     return 0;
 }
@@ -267,7 +268,7 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
         fstat(tar_fd, &sb);
         tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
         while (is_end(buffer) == 0){
-            buffer = (tar_header_t*) ((uint8_t*)buffer + 512 + TAR_INT(buffer->size));
+            buffer = (tar_header_t*)(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
         }
     }
 }
@@ -291,7 +292,6 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
  *
  */
 ssize_t read_file(int tar_fd, char *path, size_t offset, uint8_t *dest, size_t *len) {
-    int rep;
     if(is_file(tar_fd,path)!=0){
         struct stat sb;
         fstat(tar_fd, &sb);
@@ -313,10 +313,9 @@ ssize_t read_file(int tar_fd, char *path, size_t offset, uint8_t *dest, size_t *
                 return -4;
             }
             *len = read_bytes;
-            rep = s -> st_size-read_bytes;
-            buffer = (tar_header_t*) ((uint8_t*)buffer + 512 + TAR_INT(buffer->size));
+            return s -> st_size-read_bytes;
         }
-        return rep;
+        *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
     }
     return -5;
 }
@@ -328,7 +327,7 @@ int main(int argc, char **argv){
         return -1;
     }
 
-    int ret = read_file(fd , argv[2], 0, NULL, NULL);
+    int ret = exists(fd , argv[2]);
     printf("%d\n", ret);
 
     return 0;
