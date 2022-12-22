@@ -112,13 +112,13 @@ int exists(int tar_fd, char *path) {
     tar_header_t* buffer = mmap(NULL, sb -> st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
     while(is_end(buffer) == 0){
         char* name = buffer->name;
-        printf("%s\n",name);
         if(strcmp(name,path) == 0){
             munmap(buffer, sb -> st_size);
             return 1;
         }
+        printf("%s\n",name);
         printf("%ld", strtol(buffer->size, NULL, 8));
-        *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
+        // *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
     }
 }
 
@@ -170,11 +170,11 @@ int is_dir(int tar_fd, char *path) { //casser
                 free(buffer);
                 return 0;
             }
-            free(buffer);
-            return 1;    
-            }
-            buffer = (tar_header_t*)(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
+            // *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
         }
+        free(buffer);
+        return 1;
+    }
     return 0;
 }
 
