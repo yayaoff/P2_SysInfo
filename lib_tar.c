@@ -4,6 +4,14 @@
 #include <string.h>
 #include <stdlib.h>
 #include <fcntl.h>
+ #include <sys/mman.h>
+
+#include "lib_tar.h"
+#include <stdio.h>
+#include <sys/stat.h> 
+#include <string.h>
+#include <stdlib.h>
+#include <fcntl.h>
 #include <sys/mman.h>
 
 int is_end(tar_header_t* buffer){
@@ -23,11 +31,24 @@ char* checksum(tar_header_t* buffer){
     char* sm=malloc(sizeof(char)*8);
     unsigned int sum = 0;
     char* buf = (char*) buffer;
-    for (int i = 0; i < sizeof(buf); i++) {
+    int i=0;
+    for(int i=0;i<148;i++){
         sum += buf[i];
     }
-    sprintf(sm, "%d", sum);
+    for(int i=0;i<8;i++){
+        sum+= ' ';
+    }
+    for(int i=156;i<512;i++){
+        sum += buf[i];
+    }
+    sprintf(sm, "%06o", sum);
     return sm;
+}
+
+int find_block(size_t size){
+    int block = size/512;
+    if(size%512 != 0) block++;
+    return block;
 }
 
 /**
@@ -75,6 +96,7 @@ int check_archive(int tar_fd) {
     return 0;
 }
 
+
 /**
  * Checks whether an entry exists in the archive.
  *
@@ -85,12 +107,21 @@ int check_archive(int tar_fd) {
  *         any other value otherwise.
  */
 int exists(int tar_fd, char *path) {
-    if(check_archive(tar_fd)==0){
-        if (access(path, F_OK) == 0) return 1;
+    struct stat sb;
+    fstat(tar_fd, &sb);
+    tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
+    while(is_end(buffer) == 0){
+        //printf("%s\n",buffer->name);
+        if(strcmp(buffer->name,path) == 0){
+            munmap(buffer, sb.st_size);
+            return 1;
+        }
+        printf("%ld", TAR_INT(buffer->size));
+        buffer = (tar_header_t*) ((int*)buffer + 512 + find_block(TAR_INT(buffer->size))*512);
     }
+    munmap(buffer, sb.st_size);
     return 0;
 }
-
 
 // /**
 //  * Checks whether an entry exists in the archive and is a directory.
@@ -124,21 +155,26 @@ int exists(int tar_fd, char *path) {
  *         any other value otherwise.
  *
  **/
-int is_dir(int tar_fd, char *path) {
-
+int is_dir(int tar_fd, char *path) { 
     if(exists(tar_fd,path)!=0){
-        char* buffer=malloc(sizeof(char));
-        off_t typeflag_seek = lseek(tar_fd,(off_t)156,SEEK_SET);
-        int tf = snprintf(buffer, sizeof(buffer), "%ld", typeflag_seek);
-        char* buf_dirtype=malloc(sizeof(char));
-        sprintf(buf_dirtype, "%c", DIRTYPE);
-        if(strcmp(buffer,buf_dirtype)!=0){
+        struct stat sb;
+        fstat(tar_fd, &sb);
+        tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
+        while (is_end(buffer) == 0){
+            char* buffer=malloc(sizeof(char));
+            off_t typeflag_seek = lseek(tar_fd,(off_t)156,SEEK_SET);
+            int tf = snprintf(buffer, sizeof(buffer), "%ld", typeflag_seek);
+            char* buf_dirtype=malloc(sizeof(char));
+            sprintf(buf_dirtype, "%c", DIRTYPE);
+            if(strcmp(buffer,buf_dirtype)!=0){
+                free(buffer);
+                return 0;
+            }
             free(buffer);
-            return 0;
+            return 1;    
+            }
+            buffer = (tar_header_t*)(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
         }
-        free(buffer);
-        return 1;
-    }
     return 0;
 }
 
@@ -154,19 +190,25 @@ int is_dir(int tar_fd, char *path) {
  */
 int is_file(int tar_fd, char *path) {
     if(exists(tar_fd,path)!=0){
-        char* buffer=malloc(sizeof(char));
-        off_t typeflag_seek = lseek(tar_fd,(off_t)156,SEEK_SET);
-        int tf = snprintf(buffer, sizeof(buffer), "%ld", typeflag_seek);
-        char* buf_filetype=malloc(sizeof(char));
-        char* buf_afiletype=malloc(sizeof(char));
-        sprintf(buf_filetype, "%c", REGTYPE);
-        sprintf(buf_afiletype, "%c", AREGTYPE);
-        if(strcmp(buffer,buf_filetype)!=0 && strcmp(buffer,buf_afiletype)!=0 ){
+        struct stat sb;
+        fstat(tar_fd, &sb);
+        tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
+        while(is_end(buffer)==0){
+            char* buffer=malloc(sizeof(char));
+            off_t typeflag_seek = lseek(tar_fd,(off_t)156,SEEK_SET);
+            int tf = snprintf(buffer, sizeof(buffer), "%ld", typeflag_seek);
+            char* buf_filetype=malloc(sizeof(char));
+            char* buf_afiletype=malloc(sizeof(char));
+            sprintf(buf_filetype, "%c", REGTYPE);
+            sprintf(buf_afiletype, "%c", AREGTYPE);
+            if(strcmp(buffer,buf_filetype)!=0 && strcmp(buffer,buf_afiletype)!=0 ){
+                free(buffer);
+                return 0;
+            }
             free(buffer);
-            return 0;
+            return 1;
         }
-        free(buffer);
-        return 1;
+        *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
     }
     return 0;
 }
@@ -181,12 +223,19 @@ int is_file(int tar_fd, char *path) {
  */
 int is_symlink(int tar_fd, char *path) {
     if(exists(tar_fd,path)!=0){
-        struct stat s;
-        if(stat(path,&s)==-1){
-            return -1;
+        struct stat sb;
+        fstat(tar_fd, &sb);
+        tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
+        while (is_end(buffer) == 0)
+        {
+            struct stat s;
+            if(stat(path,&s)==-1){
+                return -1;
+            }
+            if (S_ISLNK(s.st_mode)) return 1;
+            return 0;
         }
-        if (S_ISLNK(s.st_mode)) return 1;
-        return 0;
+        *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
     }
     return 0;
 }
@@ -214,7 +263,14 @@ int is_symlink(int tar_fd, char *path) {
  *         any other value otherwise.
  */
 int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
-    return 0;
+    if(is_dir(tar_fd,path) != 0){
+        struct stat sb;
+        fstat(tar_fd, &sb);
+        tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
+        while (is_end(buffer) == 0){
+            *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
+        }
+    }
 }
 
 /**
@@ -237,35 +293,41 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
  */
 ssize_t read_file(int tar_fd, char *path, size_t offset, uint8_t *dest, size_t *len) {
     if(is_file(tar_fd,path)!=0){
-        struct stat s;
-        if(stat(path,&s)==-1){
-            return -1;
+        struct stat sb;
+        fstat(tar_fd, &sb);
+        tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
+        while(is_end(buffer)==0){
+            struct stat* s = malloc(sizeof(struct stat));
+            if(stat(path, s)==-1){
+                return -1;
+            }
+            if(offset>s -> st_size){
+                return -2;
+            }
+            int fd = open(path,S_IRUSR);
+            if(fd==-1){
+                return -3;
+            }
+            ssize_t read_bytes = pread(fd,dest,*len,offset);
+            if(read_bytes==-1){
+                return -4;
+            }
+            *len = read_bytes;
+            return s -> st_size-read_bytes;
         }
-        if(offset>s.st_size){
-            return -2;
-        }
-        int fd = open(path,S_IRUSR);
-        if(fd==-1){
-            return -1;
-        }
-        ssize_t read_bytes = pread(fd,dest,*len,offset);
-        if(read_bytes==-1){
-            return -1;
-        }
-        *len = read_bytes;
-        return s.st_size-read_bytes;
+        *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
     }
-    return -1;
+    return -5;
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char **argv){
     int fd = open(argv[1] , O_RDONLY);
     if (fd == -1) {
         perror("open(tar_file)");
         return -1;
     }
 
-    int ret = check_archive(fd);
+    int ret = exists(fd , argv[2]);
     printf("%d\n", ret);
 
     return 0;
