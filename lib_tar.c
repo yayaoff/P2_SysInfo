@@ -321,10 +321,9 @@ ssize_t read_file(int tar_fd, char *path, size_t offset, uint8_t *dest, size_t *
                     munmap(buffer, sb.st_size);
                     return -2;
                 }
-                if(TAR_INT(buffer->size) < *len){
-                    memcpy(dest, (uint8_t*)buffer + 512 + offset, TAR_INT(buffer->size));
-                    munmap(buffer, sb.st_size);
-                    return 0;
+                int size = TAR_INT(buffer->size) - offset;
+                if(size < *len){
+                    *len = size;
                 }
                 memcpy(dest, (uint8_t*)buffer + 512 + offset, *len);
                 munmap(buffer, sb.st_size);
