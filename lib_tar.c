@@ -6,13 +6,7 @@
 #include <fcntl.h>
  #include <sys/mman.h>
 
-#include "lib_tar.h"
-#include <stdio.h>
-#include <sys/stat.h> 
-#include <string.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <sys/mman.h>
+
 
 int is_end(tar_header_t* buffer){
     if (buffer == MAP_FAILED) {
@@ -70,25 +64,25 @@ int check_archive(int tar_fd) {
     struct stat sb;
     fstat(tar_fd, &sb);
     tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
-    if(strncmp(buffer->magic,TMAGIC, TMAGLEN) != 0) {
-        munmap(buffer, sb.st_size);
-        return -1;
-    }
-    if(strncmp(buffer->version,TVERSION, TVERSLEN) != 0){
-        munmap(buffer, sb.st_size);
-        return -2;
-    } 
-    char* chsm = checksum(buffer);
-    if (strncmp(chsm,buffer->chksum,) != 0){
-        munmap(buffer, sb.st_size);
-        free(chsm);
-        return -3;
-    }
     while(is_end(buffer) == 0){
+        if(strncmp(buffer->magic,TMAGIC, TMAGLEN) != 0) {
+            munmap(buffer, sb.st_size);
+            return -1;
+        }
+        if(strncmp(buffer->version,TVERSION, TVERSLEN) != 0){
+            munmap(buffer, sb.st_size);
+            return -2;
+        }
+        char* chsm = checksum(buffer);
+        if (strncmp(chsm,buffer->chksum, 8) != 0){
+            munmap(buffer, sb.st_size);
+            free(chsm);
+            return -3;
+        }
         count++;
         buffer = (tar_header_t*) ((uint8_t*)buffer + 512 + find_block(TAR_INT(buffer->size))*512);
+        free(chsm);
     }
-    free(chsm);
     munmap(buffer, sb.st_size);
     return count;
 }
@@ -320,18 +314,30 @@ ssize_t read_file(int tar_fd, char *path, size_t offset, uint8_t *dest, size_t *
     struct stat sb;
     fstat(tar_fd, &sb);
     tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
-    if(offset > *len) return -2;
-    if(is_file(tar_fd,path)!=0){
-        while(is_end(buffer)==0){
-            memcpy(dest, buffer + 512 + offset, *len);
-            buffer = (tar_header_t*)((uint8_t*)buffer + 512 + find_block(TAR_INT(buffer->size))*512);  
+    while(is_end(buffer)==0){
+        if(strcmp(buffer->name,path) == 0){
+            if(is_file(tar_fd,path) == 0){
+                if(TAR_INT(buffer->size) < offset){
+                    munmap(buffer, sb.st_size);
+                    return -2;
+                }
+                if(TAR_INT(buffer->size) < *len){
+                    memcpy(dest, buffer + 512 + offset, TAR_INT(buffer->size));
+                    munmap(buffer, sb.st_size);
+                    return 0;
+                }
+                memcpy(dest, buffer + 512 + offset, *len);
+                munmap(buffer, sb.st_size);
+                return TAR_INT(buffer->size) - *len;
+            }
+            if (is_symlink(tar_fd, path) == 0){
+                read_file(tar_fd, buffer->linkname, offset, dest, len);
+            }
         }
-        return 0;
+        buffer = (tar_header_t*)((uint8_t*)buffer + 512 + find_block(TAR_INT(buffer->size))*512);  
     }
-    if(is_symlink(tar_fd,path)!=0){
-        return read_file(tar_fd, buffer -> linkname, offset, dest,len);
-    }
-    return -1;
+    return 0;
+
 }
 
 // int main(int argc, char *argv[]) {
