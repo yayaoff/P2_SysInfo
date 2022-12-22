@@ -322,16 +322,16 @@ ssize_t read_file(int tar_fd, char *path, size_t offset, uint8_t *dest, size_t *
                     return -2;
                 }
                 if(TAR_INT(buffer->size) < *len){
-                    memcpy(dest, buffer + 512 + offset, TAR_INT(buffer->size));
+                    memcpy(dest, (uint8_t*)buffer + 512 + offset, TAR_INT(buffer->size));
                     munmap(buffer, sb.st_size);
                     return 0;
                 }
-                memcpy(dest, buffer + 512 + offset, *len);
+                memcpy(dest, (uint8_t*)buffer + 512 + offset, *len);
                 munmap(buffer, sb.st_size);
                 return TAR_INT(buffer->size) - *len;
             }
             if (is_symlink(tar_fd, path) == 0){
-                read_file(tar_fd, buffer->linkname, offset, dest, len);
+                return read_file(tar_fd, buffer->linkname, offset, dest, len);
             }
         }
         buffer = (tar_header_t*)((uint8_t*)buffer + 512 + find_block(TAR_INT(buffer->size))*512);  
