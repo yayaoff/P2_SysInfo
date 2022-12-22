@@ -335,6 +335,7 @@ ssize_t read_file(int tar_fd, char *path, size_t offset, uint8_t *dest, size_t *
         }
         buffer = (tar_header_t*)((uint8_t*)buffer + 512 + find_block(TAR_INT(buffer->size))*512);  
     }
+    munmap(buffer, sb.st_size);
     return -1;
 }
 
