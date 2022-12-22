@@ -4,15 +4,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <fcntl.h>
- #include <sys/mman.h>
-
-#include "lib_tar.h"
-#include <stdio.h>
-#include <sys/stat.h> 
-#include <string.h>
-#include <stdlib.h>
-#include <fcntl.h>
 #include <sys/mman.h>
+
 
 int is_end(tar_header_t* buffer){
     if (buffer == MAP_FAILED) {
@@ -117,8 +110,9 @@ int exists(int tar_fd, char *path) {
             return 1;
         }
         printf("%s\n",name);
-        printf("%ld", strtol(buffer->size, NULL, 8));
-        // *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
+        char* endtpr = NULL;
+        printf("%ld", strtol(buffer->size, &endtpr, 8));
+        *(buffer + 512 + find_block(strtol(buffer->size, &endtpr, 8))*512);
     }
 }
 
@@ -208,7 +202,7 @@ int is_file(int tar_fd, char *path) {
             free(buffer);
             return 1;
         }
-        *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
+        // *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
     }
     return 0;
 }
@@ -235,7 +229,7 @@ int is_symlink(int tar_fd, char *path) {
             if (S_ISLNK(s.st_mode)) return 1;
             return 0;
         }
-        *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
+        // *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
     }
     return 0;
 }
@@ -268,7 +262,7 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
         fstat(tar_fd, &sb);
         tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
         while (is_end(buffer) == 0){
-            *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
+            // *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
         }
     }
 }
@@ -315,7 +309,7 @@ ssize_t read_file(int tar_fd, char *path, size_t offset, uint8_t *dest, size_t *
             *len = read_bytes;
             return s -> st_size-read_bytes;
         }
-        *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
+        // *(buffer + 512 + find_block(strtol(buffer->size, NULL, 8))*512);
     }
     return -5;
 }
