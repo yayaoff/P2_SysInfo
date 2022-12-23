@@ -308,20 +308,37 @@ int is_symlink(int tar_fd, char *path)
  * @return zero if no directory at the given path exists in the archive,
  *         any other value otherwise.
  */
-int list(int tar_fd, char *path, char **entries, size_t *no_entries)
-{
-    if (is_dir(tar_fd, path) != 0)
-    {
+int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
+    if(exists(tar_fd,path)!=0){
         struct stat sb;
         fstat(tar_fd, &sb);
-        tar_header_t *buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
-        while (is_end(buffer) == 0)
-        {
-            buffer = (tar_header_t *)((uint8_t *)buffer + 512 + find_block(TAR_INT(buffer->size)) * 512);
+        tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
+        int count = 0;
+        while (is_end(buffer) == 0){
+            if(strcmp(buffer->name,path) == 0){
+                if(is_dir(tar_fd,path)!=0){
+                    if (count < *no_entries){
+                        strcpy(entries[count], path);
+                        count++;
+                    }
+                    else{
+                        munmap(buffer, sb.st_size);
+                        return 0;
+                    }
+                    buffer = (tar_header_t*)((uint8_t*)buffer + 512 + find_block(TAR_INT(buffer->size))*512);
+                }
+                if(is_symlink(tar_fd,path)!=0){
+                    return(list(tar_fd, buffer->linkname, entries, no_entries));
+                }
+            }
+            buffer = (tar_header_t*)((uint8_t*)buffer + 512 + find_block(TAR_INT(buffer->size))*512);
+            count++;
         }
+        munmap(buffer, sb.st_size);
     }
     return 0;
 }
+
 
 /**
  * Reads a file at a given path in the archive.
@@ -385,7 +402,7 @@ ssize_t read_file(int tar_fd, char *path, size_t offset, uint8_t *dest, size_t *
 //     }
 
 //     // char *path = argv[2];
-//     int rep = check_archive(tar_fd);
+//     int rep = list(tar_fd, argv[2], argv[3], argv[4]);
 //     printf("%d\n", rep);
 //     return 0;
 // }
