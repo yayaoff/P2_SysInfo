@@ -313,16 +313,29 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
         struct stat sb;
         fstat(tar_fd, &sb);
         tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
+        int count = 0;
         while (is_end(buffer) == 0){
             if(strcmp(buffer->name,path) == 0){
                 if(is_dir(tar_fd,path)!=0){
+                    int dir_size = TAR_INT(buffer->size);
+                    printf("SIZE= %d\n",dir_size);
+                    printf("%s\n",buffer->gid);
+                    buffer = (tar_header_t*)((uint8_t*)buffer + 512 + dir_size);
+                    for (int i = 0; i < dir_size ; i++){
+                        no_entries++;
+                        memcpy(entries[i],buffer->name,(size_t)100);
+                        printf("e[%d] = %s\n",i,entries[i]);
+                        buffer = (tar_header_t*)((uint8_t*)buffer + 512 + dir_size);
+                    }
+                    munmap(buffer, sb.st_size);
                     return 1;
                 }
                 if(is_symlink(tar_fd,path)!=0){
                     return(list(tar_fd, buffer->linkname, entries, no_entries));
                 }
             }
-            buffer = (tar_header_t*)((uint8_t*)buffer + 512 + find_block(TAR_INT(buffer->size))*512);  
+            buffer = (tar_header_t*)((uint8_t*)buffer + 512 + find_block(TAR_INT(buffer->size))*512);
+            count++;
         }
         munmap(buffer, sb.st_size);
     }
@@ -390,9 +403,12 @@ int main(int argc, char *argv[]) {
         perror("open");
         return 1;
     }
-
-    // char *path = argv[2];
-    int rep = check_archive(tar_fd);
+    char **entries = malloc(sizeof(char*)*100);
+    for(int i =0; i < 100; i++){
+        entries[i]=malloc(sizeof(char)*100);
+    }
+    int rep = list(tar_fd,argv[2],entries,0);
     printf("%d\n", rep);
+    free(entries);
     return 0;
 }
