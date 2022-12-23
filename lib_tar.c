@@ -51,6 +51,21 @@ int find_block(size_t size)
     return block;
 }
 
+tar_header_t* skip_dir(tar_header_t *buffer){
+    int cnt=0;
+    tar_header_t* new_b = buffer;
+    char *dir_type = malloc(sizeof(char));
+    sprintf(dir_type, "%c", DIRTYPE);
+    char *flag = malloc(sizeof(char));
+    sprintf(flag, "%c", buffer->typeflag);
+    while(is_end(buffer)==0){
+        if(strcmp(flag,dir_type)==0) return skip_dir(buffer);
+        cnt++;
+        buffer = (tar_header_t *)((uint8_t *)buffer + 512 + find_block(TAR_INT(buffer->size)) * 512);
+    }
+    sprintf(new_b->size,"%d", cnt);
+}
+
 /**
  * Checks whether the archive is valid.
  *
@@ -310,22 +325,30 @@ int is_symlink(int tar_fd, char *path)
  */
 int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
     if(exists(tar_fd,path)!=0){
+        *no_entries=0;
         struct stat sb;
         fstat(tar_fd, &sb);
         tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
-        int count = 0;
         while (is_end(buffer) == 0){
             if(strcmp(buffer->name,path) == 0){
                 if(is_dir(tar_fd,path)!=0){
-                    int dir_size = TAR_INT(buffer->size);
-                    printf("SIZE= %d\n",dir_size);
-                    printf("%s\n",buffer->gid);
-                    buffer = (tar_header_t*)((uint8_t*)buffer + 512 + dir_size);
-                    for (int i = 0; i < dir_size ; i++){
-                        no_entries++;
-                        memcpy(entries[i],buffer->name,(size_t)100);
-                        printf("e[%d] = %s\n",i,entries[i]);
-                        buffer = (tar_header_t*)((uint8_t*)buffer + 512 + dir_size);
+                    // int dir_size = TAR_INT(buffer->size);
+                    // printf("SIZE= %d\n",dir_size);
+                    // for (int i = 0; i < dir_size ; i++){
+                    //     no_entries++;
+                    //     memcpy(entries[i],buffer->name,(size_t)100);
+                    //     printf("e[%d] = %s\n",i,entries[i]);
+                    //     buffer = (tar_header_t*)((uint8_t*)buffer + 512 + dir_size);
+                    // }
+                    int j=0;
+                    tar_header_t* new_buf= (tar_header_t*)((uint8_t*)buffer + 512);
+                    while(j<=100){
+                        entries[j] = new_buf->name;
+                        if(new_buf->typeflag == 5){
+                            new_buf = skip_dir(new_buf);
+                        }
+                        j++;
+                        new_buf = (tar_header_t*)((uint8_t*)new_buf + 512 + (TAR_INT(new_buf->size)));
                     }
                     munmap(buffer, sb.st_size);
                     return 1;
@@ -335,7 +358,6 @@ int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
                 }
             }
             buffer = (tar_header_t*)((uint8_t*)buffer + 512 + find_block(TAR_INT(buffer->size))*512);
-            count++;
         }
         munmap(buffer, sb.st_size);
     }
@@ -403,11 +425,12 @@ int main(int argc, char *argv[]) {
         perror("open");
         return 1;
     }
+    size_t *no_entries = malloc(sizeof(size_t));
     char **entries = malloc(sizeof(char*)*100);
     for(int i =0; i < 100; i++){
         entries[i]=malloc(sizeof(char)*100);
     }
-    int rep = list(tar_fd,argv[2],entries,0);
+    int rep = list(tar_fd,argv[2],entries,no_entries);
     printf("%d\n", rep);
     free(entries);
     return 0;
