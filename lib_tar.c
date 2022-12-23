@@ -308,20 +308,27 @@ int is_symlink(int tar_fd, char *path)
  * @return zero if no directory at the given path exists in the archive,
  *         any other value otherwise.
  */
-int list(int tar_fd, char *path, char **entries, size_t *no_entries)
-{
-    if (is_dir(tar_fd, path) != 0)
-    {
+int list(int tar_fd, char *path, char **entries, size_t *no_entries) {
+    if(exists(tar_fd,path)!=0){
         struct stat sb;
         fstat(tar_fd, &sb);
-        tar_header_t *buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
-        while (is_end(buffer) == 0)
-        {
-            buffer = (tar_header_t *)((uint8_t *)buffer + 512 + find_block(TAR_INT(buffer->size)) * 512);
+        tar_header_t* buffer = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, tar_fd, 0);
+        while (is_end(buffer) == 0){
+            if(strcmp(buffer->name,path) == 0){
+                if(is_dir(tar_fd,path)!=0){
+                    return 1;
+                }
+                if(is_symlink(tar_fd,path)!=0){
+                    return(list(tar_fd, buffer->linkname, entries, no_entries));
+                }
+            }
+            buffer = (tar_header_t*)((uint8_t*)buffer + 512 + find_block(TAR_INT(buffer->size))*512);  
         }
+        munmap(buffer, sb.st_size);
     }
     return 0;
 }
+
 
 /**
  * Reads a file at a given path in the archive.
@@ -377,15 +384,15 @@ ssize_t read_file(int tar_fd, char *path, size_t offset, uint8_t *dest, size_t *
     return -1;
 }
 
-// int main(int argc, char *argv[]) {
-//     int tar_fd = open(argv[1], O_RDONLY);
-//     if (tar_fd == -1) {
-//         perror("open");
-//         return 1;
-//     }
+int main(int argc, char *argv[]) {
+    int tar_fd = open(argv[1], O_RDONLY);
+    if (tar_fd == -1) {
+        perror("open");
+        return 1;
+    }
 
-//     // char *path = argv[2];
-//     int rep = check_archive(tar_fd);
-//     printf("%d\n", rep);
-//     return 0;
-// }
+    // char *path = argv[2];
+    int rep = check_archive(tar_fd);
+    printf("%d\n", rep);
+    return 0;
+}
